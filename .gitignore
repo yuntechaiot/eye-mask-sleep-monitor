@@ -1,0 +1,20 @@
+# Python / Streamlit local files
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.streamlit/secrets.toml
+
+# macOS / Windows metadata
+.DS_Store
+Thumbs.db
+
+# Never publish credentials, participant data, or private vendor documents
+supabase_user_account.txt
+sleep_logs_rows.sql
+*.pdf
+SQL.png
+
+# Legacy browser-only app (contains no server-side access control)
+睡眠日誌表單.html
+start_public_site.py
