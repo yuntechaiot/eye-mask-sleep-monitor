@@ -89,7 +89,10 @@ def submit_sleep_log(row: dict) -> None:
     if not dashboard.SUPABASE_URL or not dashboard.SUPABASE_KEY:
         raise RuntimeError("Supabase 尚未完成設定")
     client = dashboard.get_supabase(dashboard.SUPABASE_URL, dashboard.SUPABASE_KEY)
-    client.table("sleep_logs").insert(row).execute()
+    client.table("sleep_logs").insert(
+        row,
+        returning="minimal",
+    ).execute()
 
 
 def render_sleep_diary(member_id: str) -> None:
