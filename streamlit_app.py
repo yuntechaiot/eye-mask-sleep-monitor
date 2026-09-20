@@ -341,7 +341,7 @@ def render_sleep_log_records() -> None:
     with filter_col2:
         selected_dates = st.date_input(
             "日誌日期範圍",
-            value=(today - timedelta(days=30), today),
+            value=(today - timedelta(days=180), today),
             max_value=today,
             key="sleep_log_date_filter",
         )
