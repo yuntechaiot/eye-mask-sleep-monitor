@@ -14,8 +14,9 @@ from __future__ import annotations
 import importlib
 import io
 import re
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
+import pandas as pd
 import qrcode
 import streamlit as st
 
@@ -24,6 +25,46 @@ dashboard = importlib.import_module("數據監控室")
 
 MEMBER_PATTERN = re.compile(r"^ycc\d{8}$")
 MEMBERS = [f"ycc{i:08d}" for i in range(1, 51)]
+
+SLEEP_LOG_SELECT = ",".join(
+    [
+        "id",
+        "member_id",
+        "name",
+        "date",
+        "headphone_min",
+        "sleep_time",
+        "sleep_time_ampm",
+        "sleep_onset_min",
+        "wakeup_count",
+        "fallback_sleep",
+        "disturbance",
+        "disturbance_scale",
+        "morning_wake_time",
+        "wake_time",
+        "sleep_quality",
+        "created_at",
+    ]
+)
+
+SLEEP_LOG_COLUMN_NAMES = {
+    "id": "紀錄 ID",
+    "member_id": "會員編號",
+    "name": "姓名",
+    "date": "日誌日期",
+    "headphone_min": "耳機（分）",
+    "sleep_time": "躺床時間",
+    "sleep_time_ampm": "AM/PM",
+    "sleep_onset_min": "入睡耗時（分）",
+    "wakeup_count": "夜醒次數",
+    "fallback_sleep": "醒後睡回",
+    "disturbance": "干擾因素",
+    "disturbance_scale": "干擾程度",
+    "morning_wake_time": "醒來時間",
+    "wake_time": "離床時間",
+    "sleep_quality": "睡眠品質",
+    "created_at": "送出時間",
+}
 
 
 def is_valid_member(member_id: str) -> bool:
@@ -255,9 +296,155 @@ def render_member_link_tool() -> None:
         )
 
 
+def fetch_sleep_logs(member_id: str, start_date, end_date) -> list[dict]:
+    """以伺服器端管理金鑰讀取研究人員查詢範圍內的日誌。"""
+    admin_key = dashboard.get_setting("SUPABASE_ADMIN_KEY")
+    if not dashboard.SUPABASE_URL or not admin_key:
+        raise RuntimeError("SUPABASE_ADMIN_KEY 尚未完成設定")
+
+    client = dashboard.get_supabase(dashboard.SUPABASE_URL, admin_key)
+    query = (
+        client.table("sleep_logs")
+        .select(SLEEP_LOG_SELECT)
+        .gte("date", start_date.isoformat())
+        .lte("date", end_date.isoformat())
+        .order("date", desc=True)
+        .order("created_at", desc=True)
+        .limit(500)
+    )
+    if member_id != "全部會員":
+        query = query.eq("member_id", member_id)
+    response = query.execute()
+    return list(response.data or [])
+
+
+def render_sleep_log_records() -> None:
+    """只在研究人員登入後顯示 Supabase 睡眠日誌。"""
+    st.header("📝 已送出的睡眠日誌")
+    st.caption("資料來自 Supabase；此頁目前只提供查詢，不提供修改或刪除。")
+
+    if not dashboard.get_setting("SUPABASE_ADMIN_KEY"):
+        st.warning(
+            "尚未設定 SUPABASE_ADMIN_KEY，因此無法安全讀取歷史日誌。"
+            "請先在 Streamlit Secrets 加入 Supabase Secret Key。"
+        )
+        return
+
+    today = datetime.now(dashboard.TW_TZ).date()
+    filter_col1, filter_col2 = st.columns([1, 2])
+    with filter_col1:
+        member_id = st.selectbox(
+            "會員編號",
+            ["全部會員", *MEMBERS],
+            key="sleep_log_member_filter",
+        )
+    with filter_col2:
+        selected_dates = st.date_input(
+            "日誌日期範圍",
+            value=(today - timedelta(days=30), today),
+            max_value=today,
+            key="sleep_log_date_filter",
+        )
+
+    if isinstance(selected_dates, (tuple, list)):
+        if len(selected_dates) == 2:
+            start_date, end_date = selected_dates
+        elif len(selected_dates) == 1:
+            start_date = end_date = selected_dates[0]
+        else:
+            start_date = end_date = today
+    else:
+        start_date = end_date = selected_dates
+
+    name_keyword = st.text_input(
+        "姓名篩選（選填）",
+        placeholder="輸入部分姓名",
+        key="sleep_log_name_filter",
+    ).strip()
+
+    try:
+        records = fetch_sleep_logs(member_id, start_date, end_date)
+    except Exception as exc:
+        print(f"Supabase sleep log query failed: {type(exc).__name__}")
+        st.error("無法讀取睡眠日誌，請確認 SUPABASE_ADMIN_KEY、RLS 與資料表權限設定。")
+        return
+
+    frame = pd.DataFrame(records)
+    if frame.empty:
+        st.info("目前篩選條件下沒有睡眠日誌。")
+        return
+
+    if name_keyword:
+        frame = frame[
+            frame["name"].fillna("").astype(str).str.contains(name_keyword, case=False, regex=False)
+        ]
+    if frame.empty:
+        st.info("沒有符合姓名條件的睡眠日誌。")
+        return
+
+    frame["created_at"] = (
+        pd.to_datetime(frame["created_at"], utc=True, errors="coerce")
+        .dt.tz_convert(dashboard.TW_TZ)
+        .dt.strftime("%Y-%m-%d %H:%M:%S")
+    )
+
+    metric_col1, metric_col2, metric_col3 = st.columns(3)
+    metric_col1.metric("紀錄數", len(frame))
+    metric_col2.metric("會員數", frame["member_id"].nunique())
+    quality = pd.to_numeric(frame["sleep_quality"], errors="coerce").mean()
+    metric_col3.metric("平均睡眠品質", f"{quality:.1f} / 5" if pd.notna(quality) else "N/A")
+
+    display_frame = frame.rename(columns=SLEEP_LOG_COLUMN_NAMES)
+    display_columns = [
+        SLEEP_LOG_COLUMN_NAMES[column]
+        for column in SLEEP_LOG_COLUMN_NAMES
+        if SLEEP_LOG_COLUMN_NAMES[column] in display_frame.columns
+    ]
+    st.dataframe(
+        display_frame[display_columns],
+        width="stretch",
+        hide_index=True,
+        height=min(600, 38 + len(display_frame) * 35),
+    )
+
+    record_options = {
+        f"#{row['id']}｜{row['member_id']}｜{row['date']}｜{row['name']}": row
+        for row in frame.to_dict("records")
+    }
+    with st.expander("查看單筆完整內容"):
+        selected_label = st.selectbox(
+            "選擇紀錄",
+            list(record_options),
+            key="sleep_log_detail_record",
+        )
+        record = record_options[selected_label]
+        detail_col1, detail_col2, detail_col3 = st.columns(3)
+        detail_col1.metric("睡眠品質", f"{record['sleep_quality']} / 5")
+        detail_col2.metric("入睡耗時", f"{record['sleep_onset_min']} 分")
+        detail_col3.metric("夜醒次數", f"{record['wakeup_count']} 次")
+        st.markdown(
+            f"""
+            - **會員／姓名：** `{record['member_id']}`／{record['name']}
+            - **日誌日期：** {record['date']}
+            - **躺床：** {record['sleep_time']} ({record['sleep_time_ampm']})
+            - **醒來／離床：** {record['morning_wake_time']}／{record['wake_time']}
+            - **耳機使用：** {record['headphone_min']} 分鐘
+            - **醒後睡回：** {record['fallback_sleep']}
+            - **干擾因素／程度：** {record['disturbance']}／{record['disturbance_scale']}
+            - **送出時間：** {record['created_at']}
+            """
+        )
+
+
 def render_researcher_portal() -> None:
     if st.session_state.get("token"):
         render_member_link_tool()
+        monitor_tab, log_tab = st.tabs(["🏥 健康監控", "📝 睡眠日誌紀錄"])
+        with monitor_tab:
+            dashboard.main()
+        with log_tab:
+            render_sleep_log_records()
+        return
     else:
         render_public_styles()
         st.markdown(
