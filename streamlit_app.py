@@ -177,6 +177,9 @@ def submit_sleep_log(row: dict) -> None:
 def render_sleep_diary(member_id: str) -> None:
     render_public_styles()
     required_mark = " :red[*]"
+    version_key = f"sleep_diary_form_version_{member_id}"
+    success_key = f"sleep_diary_success_{member_id}"
+    form_version = st.session_state.get(version_key, 0)
     st.markdown(
         f"""
         <section class="sleep-hero sleep-diary-page">
@@ -188,9 +191,11 @@ def render_sleep_diary(member_id: str) -> None:
         unsafe_allow_html=True,
     )
     st.caption("紅色 * 表示必填；請依實際情況填寫。")
+    if st.session_state.pop(success_key, False):
+        st.success("日誌已送出，謝謝您的填寫。", icon="✅")
 
     today = datetime.now(dashboard.TW_TZ).date()
-    with st.form("sleep_diary", clear_on_submit=True, border=False):
+    with st.form(f"sleep_diary_{member_id}_{form_version}", clear_on_submit=False, border=False):
         with st.container(border=True):
             st.subheader("基本資料")
             name = st.text_input(f"姓名{required_mark}", max_chars=80)
@@ -244,16 +249,16 @@ def render_sleep_diary(member_id: str) -> None:
         with st.container(border=True):
             st.subheader("干擾因素")
             disturbance_labels = {
-                "人": "人／人際",
-                "事，如情緒": "事／情緒",
-                "物，如環境": "物／環境",
+                "人": "人",
+                "事，如情緒": "事，如情緒",
+                "物，如環境": "物，如環境",
                 "無": "無干擾",
             }
             st.markdown(f"昨晚有哪些因素干擾睡眠？{required_mark}（可複選）")
             disturbance = [
                 value
                 for value, label in disturbance_labels.items()
-                if st.checkbox(label, key=f"disturbance_{value}")
+                if st.checkbox(label, key=f"disturbance_{member_id}_{form_version}_{value}")
             ]
             st.caption("可複選；若沒有干擾，請只勾選「無干擾」。")
             disturbance_scale = st.pills(
@@ -312,7 +317,9 @@ def render_sleep_diary(member_id: str) -> None:
         else:
             try:
                 submit_sleep_log(row)
-                st.success("日誌已送出，謝謝您的填寫。", icon="✅")
+                st.session_state[success_key] = True
+                st.session_state[version_key] = form_version + 1
+                st.rerun()
             except Exception:
                 st.error("日誌送出失敗，請稍後再試；若持續發生，請通知研究人員。")
 
