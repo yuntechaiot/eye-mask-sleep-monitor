@@ -255,12 +255,12 @@ def render_sleep_diary(member_id: str) -> None:
                 "無": "無干擾",
             }
             st.markdown(f"昨晚有哪些因素干擾睡眠？{required_mark}（可複選）")
+            st.caption("若沒有干擾，請只勾選「無干擾」。")
             disturbance = [
                 value
                 for value, label in disturbance_labels.items()
                 if st.checkbox(label, key=f"disturbance_{member_id}_{form_version}_{value}")
             ]
-            st.caption("可複選；若沒有干擾，請只勾選「無干擾」。")
             disturbance_scale = st.pills(
                 f"干擾程度（點選一項）{required_mark}",
                 options=list(range(6)),
