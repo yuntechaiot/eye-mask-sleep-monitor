@@ -3,10 +3,13 @@ import requests
 import pandas as pd
 import plotly.graph_objects as go
 import os
+import time as system_time
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo  # 用於精確時區處理
 from supabase import create_client, Client
 from typing import Optional
+
+from researcher_session import COOKIE_NAME, ResearcherSessionStore, cookie_script
 
 # ==========================================
 # 1. 設定與全域配置
@@ -35,6 +38,12 @@ TW_TZ = ZoneInfo("Asia/Taipei") # 定義台灣時區
 def get_supabase(url: str, key: str) -> Client:
     return create_client(url, key)
 
+
+@st.cache_resource
+def get_researcher_sessions() -> ResearcherSessionStore:
+    return ResearcherSessionStore()
+
+
 def ensure_session_state() -> None:
     """每個 Streamlit 使用者工作階段都要各自初始化。
 
@@ -44,6 +53,58 @@ def ensure_session_state() -> None:
         st.session_state.token = None
     if "target_member" not in st.session_state:
         st.session_state.target_member = None
+    if "researcher_session_id" not in st.session_state:
+        st.session_state.researcher_session_id = None
+
+
+def restore_researcher_session() -> None:
+    """Restore a still-valid login after a browser refresh (new WebSocket)."""
+    ensure_session_state()
+    session_id = st.session_state.researcher_session_id
+    if not session_id:
+        try:
+            session_id = st.context.cookies.get(COOKIE_NAME)
+        except (AttributeError, RuntimeError):
+            session_id = None
+        if not isinstance(session_id, str):
+            session_id = None
+
+    session = get_researcher_sessions().get(session_id)
+    if session:
+        st.session_state.researcher_session_id = session_id
+        st.session_state.token = session.token
+        st.session_state.researcher_account = session.account
+        st.session_state.researcher_expires_at = session.expires_at
+        return
+
+    if session_id:
+        st.session_state.researcher_cookie_action = ("clear", None, False)
+    st.session_state.token = None
+    st.session_state.researcher_session_id = None
+    st.session_state.target_member = None
+    st.session_state.pop("researcher_account", None)
+    st.session_state.pop("researcher_expires_at", None)
+
+
+def render_researcher_cookie_action() -> None:
+    """Write the opaque ID cookie from a first-party Streamlit HTML element."""
+    action = st.session_state.pop("researcher_cookie_action", None)
+    if action:
+        operation, session_id, remember = action
+        st.html(
+            cookie_script(session_id if operation == "set" else None, remember=remember),
+            unsafe_allow_javascript=True,
+        )
+
+
+def logout_researcher() -> None:
+    get_researcher_sessions().revoke(st.session_state.get("researcher_session_id"))
+    st.session_state.token = None
+    st.session_state.researcher_session_id = None
+    st.session_state.target_member = None
+    st.session_state.pop("researcher_account", None)
+    st.session_state.pop("researcher_expires_at", None)
+    st.session_state.researcher_cookie_action = ("clear", None, False)
 
 
 ensure_session_state()
@@ -78,7 +139,7 @@ STAGE_MAP = {
 # ==========================================
 # 2. 輔助功能
 # ==========================================
-def login(account, password):
+def login(account, password, remember=False):
     try:
         res = requests.post(
             f"{BASE_URL}/login/researcher",
@@ -86,7 +147,14 @@ def login(account, password):
             timeout=20,
         )
         if res.status_code == 200 and res.json().get("success"):
-            st.session_state.token = res.json()["data"]["access_token"]
+            token = res.json()["data"]["access_token"]
+            get_researcher_sessions().revoke(st.session_state.get("researcher_session_id"))
+            session_id, session = get_researcher_sessions().create(token, account)
+            st.session_state.token = token
+            st.session_state.researcher_session_id = session_id
+            st.session_state.researcher_account = account
+            st.session_state.researcher_expires_at = session.expires_at
+            st.session_state.researcher_cookie_action = ("set", session_id, remember)
             st.success("✅ 登入成功！")
             return True
         else:
@@ -731,17 +799,23 @@ def get_dashboard_fragment(run_every_seconds):
 # ==========================================
 def main():
     ensure_session_state()
+    restore_researcher_session()
+    render_researcher_cookie_action()
     st.sidebar.title("🩺 登入")
-    
+
     if not st.session_state.token:
         with st.sidebar.form("login_form"):
             user, pwd = st.text_input("帳號"), st.text_input("密碼", type="password")
+            remember = st.checkbox("記住我（30 分鐘內免重新輸入）")
             if st.form_submit_button("登入"):
-                if login(user, pwd): st.rerun()
+                if login(user, pwd, remember): st.rerun()
+        st.sidebar.caption("重新整理後可在 30 分鐘內保持登入；勾選後，關閉再開啟瀏覽器也可在時限內免輸入。密碼不會被儲存。")
     else:
         st.sidebar.success("✅ 已登入")
+        remaining_minutes = max(1, int((st.session_state.researcher_expires_at - system_time.time() + 59) // 60))
+        st.sidebar.caption(f"登入狀態約剩 {remaining_minutes} 分鐘")
         if st.sidebar.button("登出"):
-            st.session_state.token, st.session_state.target_member = None, None
+            logout_researcher()
             st.rerun()
 
 

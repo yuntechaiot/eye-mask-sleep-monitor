@@ -425,6 +425,7 @@ def render_sleep_log_records() -> None:
         placeholder="輸入部分姓名",
         key="sleep_log_name_filter",
     ).strip()
+    refresh_requested = st.button("🔄 重新載入最新紀錄", key="sleep_log_refresh")
 
     try:
         records = fetch_sleep_logs(member_id, start_date, end_date)
@@ -432,6 +433,10 @@ def render_sleep_log_records() -> None:
         print(f"Supabase sleep log query failed: {type(exc).__name__}")
         st.error("無法讀取睡眠日誌，請確認 SUPABASE_ADMIN_KEY、RLS 與資料表權限設定。")
         return
+
+    st.caption(f"資料載入時間：{datetime.now(dashboard.TW_TZ):%Y/%m/%d %H:%M:%S}")
+    if refresh_requested:
+        st.success("已重新載入最新睡眠日誌。")
 
     frame = pd.DataFrame(records)
     if frame.empty:
@@ -453,10 +458,12 @@ def render_sleep_log_records() -> None:
     )
 
     metric_col1, metric_col2, metric_col3 = st.columns(3)
-    metric_col1.metric("紀錄數", len(frame))
+    metric_col1.metric("目前顯示紀錄數", len(frame))
     metric_col2.metric("會員數", frame["member_id"].nunique())
     quality = pd.to_numeric(frame["sleep_quality"], errors="coerce").mean()
     metric_col3.metric("平均睡眠品質", f"{quality:.1f} / 5" if pd.notna(quality) else "N/A")
+    if len(records) >= 500:
+        st.caption("每次最多載入最新 500 筆；若需要較精確的範圍，請調整會員或日期篩選。")
 
     display_frame = frame.rename(columns=SLEEP_LOG_COLUMN_NAMES)
     display_columns = [
@@ -532,6 +539,7 @@ def main() -> None:
             st.stop()
         render_sleep_diary(raw_member)
         return
+    dashboard.restore_researcher_session()
     render_researcher_portal()
 
 
