@@ -106,6 +106,20 @@ def render_public_styles() -> None:
             padding: 1.2rem 1.25rem;
             box-shadow: 0 3px 18px rgba(63,52,137,.08);
         }
+        div[data-testid="stMainBlockContainer"]:has(.sleep-diary-page) {
+            max-width: 650px;
+        }
+        div[data-testid="stMainBlockContainer"]:has(.sleep-diary-page) div[data-testid="stForm"] {
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            padding: 0;
+            box-shadow: none;
+        }
+        div[data-testid="stMainBlockContainer"]:has(.sleep-diary-page) div[data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 1.1rem;
+            box-shadow: 0 1px 8px rgba(63,52,137,.06);
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -148,9 +162,9 @@ def render_sleep_diary(member_id: str) -> None:
     render_public_styles()
     st.markdown(
         f"""
-        <section class="sleep-hero">
+        <section class="sleep-hero sleep-diary-page">
           <h1>🌙 深睡體驗營—睡眠日誌</h1>
-          <p>請依昨晚的實際睡眠狀況填寫，所有欄位都是必填。</p>
+          <p>請依昨晚的實際睡眠狀況填寫；此頁僅供填寫。</p>
           <span class="member-badge">{member_id}</span>
         </section>
         """,
@@ -159,93 +173,102 @@ def render_sleep_diary(member_id: str) -> None:
 
     today = datetime.now(dashboard.TW_TZ).date()
     with st.form("sleep_diary", clear_on_submit=True, border=False):
-        st.subheader("基本資料")
-        name = st.text_input("姓名", max_chars=80)
-        log_date = st.date_input("填寫日期", value=today, max_value=today)
+        with st.container(border=True):
+            st.subheader("基本資料")
+            name = st.text_input("姓名", max_chars=80)
+            log_date = st.date_input("填寫日期", value=today, max_value=today)
 
-        st.subheader("耳機使用")
-        headphone_min = st.number_input(
-            "昨晚使用耳機多久？（分鐘）",
-            min_value=0,
-            max_value=600,
-            value=0,
-            step=5,
-        )
-
-        st.subheader("入睡狀況")
-        c1, c2 = st.columns(2)
-        with c1:
-            sleep_time = st.time_input("昨晚躺上床的時間", value=time(23, 0), step=300)
-        with c2:
-            sleep_time_ampm = st.selectbox(
-                "躺床時段",
-                options=["PM", "AM"],
-                format_func=lambda value: "下午 PM（12 點前）" if value == "PM" else "上午 AM（12 點後）",
+        with st.container(border=True):
+            st.subheader("耳機使用")
+            headphone_min = st.number_input(
+                "昨晚使用耳機多久？（分鐘）",
+                min_value=0,
+                max_value=600,
+                value=0,
+                step=5,
             )
-        sleep_onset_min = st.number_input(
-            "花多久才入睡？（分鐘）",
-            min_value=0,
-            max_value=300,
-            value=15,
-            step=5,
-        )
 
-        st.subheader("睡眠中斷")
-        wakeup_count = st.number_input(
-            "昨晚夜間醒來次數",
-            min_value=0,
-            max_value=20,
-            value=0,
-            step=1,
-        )
-        fallback_sleep = st.radio(
-            "醒來後是否能睡回去？",
-            ["無（未曾醒來）", "可以馬上睡回去", "可以，但需要花點時間", "不能"],
-        )
+        with st.container(border=True):
+            st.subheader("入睡狀況")
+            st.caption("晚上 12 點前請選「下午 PM」，12 點後請選「上午 AM」。")
+            c1, c2 = st.columns(2)
+            with c1:
+                sleep_time = st.time_input("昨晚躺上床的時間", value=time(23, 0), step=300)
+            with c2:
+                sleep_time_ampm = st.selectbox(
+                    "躺床時段",
+                    options=["PM", "AM"],
+                    format_func=lambda value: "下午 PM（12 點前）" if value == "PM" else "上午 AM（12 點後）",
+                )
+            sleep_onset_min = st.number_input(
+                "花多久才入睡？（分鐘）",
+                min_value=0,
+                max_value=300,
+                value=15,
+                step=5,
+            )
 
-        st.subheader("干擾因素")
-        disturbance_labels = {
-            "人": "👥 人／人際",
-            "事，如情緒": "💭 事／情緒",
-            "物，如環境": "🏠 物／環境",
-            "無": "✓ 無干擾",
-        }
-        disturbance = st.pills(
-            "昨晚有哪些因素干擾睡眠？",
-            options=list(disturbance_labels),
-            selection_mode="multi",
-            format_func=lambda value: disturbance_labels[value],
-            width="stretch",
-            wrap=True,
-        )
-        st.caption("可複選；若沒有干擾，請只點選「無干擾」。")
-        disturbance_scale = st.pills(
-            "干擾程度（點選一項）",
-            options=list(range(6)),
-            selection_mode="single",
-            required=True,
-            width="stretch",
-            wrap=True,
-        )
-        st.caption("0 無干擾　·　1 極輕微　·　2 輕微　·　3 普通　·　4 嚴重　·　5 非常嚴重")
+        with st.container(border=True):
+            st.subheader("睡眠中斷")
+            wakeup_count = st.number_input(
+                "昨晚夜間醒來次數",
+                min_value=0,
+                max_value=20,
+                value=0,
+                step=1,
+            )
+            st.caption("若昨晚沒有醒來，請選「無（未曾醒來）」。")
+            fallback_sleep = st.radio(
+                "醒來後是否能睡回去？",
+                ["無（未曾醒來）", "可以馬上睡回去", "可以，但需要花點時間", "不能"],
+            )
 
-        st.subheader("起床狀況")
-        c3, c4 = st.columns(2)
-        with c3:
-            morning_wake_time = st.time_input("今天幾點醒來？", value=time(7, 0), step=300)
-        with c4:
-            wake_time = st.time_input("今天離床的時間？", value=time(7, 15), step=300)
+        with st.container(border=True):
+            st.subheader("干擾因素")
+            disturbance_labels = {
+                "人": "👥 人／人際",
+                "事，如情緒": "💭 事／情緒",
+                "物，如環境": "🏠 物／環境",
+                "無": "✓ 無干擾",
+            }
+            disturbance = st.pills(
+                "昨晚有哪些因素干擾睡眠？",
+                options=list(disturbance_labels),
+                selection_mode="multi",
+                format_func=lambda value: disturbance_labels[value],
+                width="stretch",
+                wrap=True,
+            )
+            st.caption("可複選；若沒有干擾，請只點選「無干擾」。")
+            disturbance_scale = st.pills(
+                "干擾程度（點選一項）",
+                options=list(range(6)),
+                selection_mode="single",
+                required=True,
+                width="stretch",
+                wrap=True,
+            )
+            st.caption("0 無干擾　·　1 極輕微　·　2 輕微　·　3 普通　·　4 嚴重　·　5 非常嚴重")
 
-        st.subheader("整體睡眠品質")
-        sleep_quality = st.pills(
-            "昨晚睡眠品質（點選一項）",
-            options=list(range(1, 6)),
-            selection_mode="single",
-            required=True,
-            width="stretch",
-            wrap=True,
-        )
-        st.caption("1 非常糟糕　·　2 不好　·　3 普通　·　4 良好　·　5 非常好")
+        with st.container(border=True):
+            st.subheader("起床狀況")
+            c3, c4 = st.columns(2)
+            with c3:
+                morning_wake_time = st.time_input("今天幾點醒來？", value=time(7, 0), step=300)
+            with c4:
+                wake_time = st.time_input("今天離床的時間？", value=time(7, 15), step=300)
+
+        with st.container(border=True):
+            st.subheader("整體睡眠品質")
+            sleep_quality = st.pills(
+                "昨晚睡眠品質（點選一項）",
+                options=list(range(1, 6)),
+                selection_mode="single",
+                required=True,
+                width="stretch",
+                wrap=True,
+            )
+            st.caption("1 非常糟糕　·　2 不好　·　3 普通　·　4 良好　·　5 非常好")
 
         submitted = st.form_submit_button("📤 送出睡眠日誌", type="primary", use_container_width=True)
 
