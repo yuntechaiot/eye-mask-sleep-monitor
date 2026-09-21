@@ -127,6 +127,10 @@ def validate_form(row: dict) -> list[str]:
         errors.append("請選擇至少一項干擾因素；若沒有干擾，請選擇「無」。")
     if "無" in disturbances and len(disturbances) > 1:
         errors.append("干擾因素選擇「無」時，不能同時選擇其他項目。")
+    if row["disturbance_scale"] is None:
+        errors.append("請選擇干擾程度。")
+    if row["sleep_quality"] is None:
+        errors.append("請選擇昨晚的睡眠品質。")
     return errors
 
 
@@ -200,25 +204,30 @@ def render_sleep_diary(member_id: str) -> None:
         )
 
         st.subheader("干擾因素")
+        disturbance_labels = {
+            "人": "👥 人／人際",
+            "事，如情緒": "💭 事／情緒",
+            "物，如環境": "🏠 物／環境",
+            "無": "✓ 無干擾",
+        }
         disturbance = st.pills(
-            "昨晚是否有人事物干擾您的睡眠？（可複選）",
-            ["人", "事，如情緒", "物，如環境", "無"],
+            "昨晚有哪些因素干擾睡眠？",
+            options=list(disturbance_labels),
             selection_mode="multi",
-            default=["無"],
+            format_func=lambda value: disturbance_labels[value],
             width="stretch",
             wrap=True,
         )
+        st.caption("可複選；若沒有干擾，請只點選「無干擾」。")
         disturbance_scale = st.pills(
-            "干擾程度",
+            "干擾程度（點選一項）",
             options=list(range(6)),
             selection_mode="single",
-            default=0,
             required=True,
             width="stretch",
             wrap=True,
-            help="0 代表無干擾，5 代表非常嚴重。",
         )
-        st.caption("0＝無干擾　1＝極輕微　2＝輕微　3＝普通　4＝嚴重　5＝非常嚴重")
+        st.caption("0 無干擾　·　1 極輕微　·　2 輕微　·　3 普通　·　4 嚴重　·　5 非常嚴重")
 
         st.subheader("起床狀況")
         c3, c4 = st.columns(2)
@@ -229,15 +238,14 @@ def render_sleep_diary(member_id: str) -> None:
 
         st.subheader("整體睡眠品質")
         sleep_quality = st.pills(
-            "昨晚睡眠品質",
+            "昨晚睡眠品質（點選一項）",
             options=list(range(1, 6)),
             selection_mode="single",
-            default=3,
             required=True,
             width="stretch",
             wrap=True,
         )
-        st.caption("1＝非常糟糕　2＝不好　3＝普通　4＝良好　5＝非常好")
+        st.caption("1 非常糟糕　·　2 不好　·　3 普通　·　4 良好　·　5 非常好")
 
         submitted = st.form_submit_button("📤 送出睡眠日誌", type="primary", use_container_width=True)
 
@@ -253,10 +261,10 @@ def render_sleep_diary(member_id: str) -> None:
             "wakeup_count": int(wakeup_count),
             "fallback_sleep": fallback_sleep.replace("（未曾醒來）", ""),
             "disturbance": ",".join(disturbance),
-            "disturbance_scale": int(disturbance_scale),
+            "disturbance_scale": int(disturbance_scale) if disturbance_scale is not None else None,
             "morning_wake_time": morning_wake_time.strftime("%H:%M"),
             "wake_time": wake_time.strftime("%H:%M"),
-            "sleep_quality": int(sleep_quality),
+            "sleep_quality": int(sleep_quality) if sleep_quality is not None else None,
         }
         errors = validate_form(row)
         if errors:
