@@ -69,15 +69,13 @@ class ResearcherSessionStore:
                 self._sessions.pop(session_id, None)
 
 
-def cookie_script(session_id: str | None, *, remember: bool = False) -> str:
+def cookie_script(session_id: str | None) -> str:
     """Set or clear the first-party cookie without placing a token in the DOM."""
     if session_id is not None and not _SESSION_ID_PATTERN.fullmatch(session_id):
         raise ValueError("Invalid researcher session ID")
     attributes = "Path=/; SameSite=Strict"
     if session_id is None:
         attributes += "; Max-Age=0"
-    elif remember:
-        attributes += f"; Max-Age={SESSION_TTL_SECONDS}"
     cookie = f"{COOKIE_NAME}={session_id or ''}; {attributes}"
     return (
         "<script>document.cookie = "

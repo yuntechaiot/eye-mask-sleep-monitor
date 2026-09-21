@@ -78,7 +78,7 @@ def restore_researcher_session() -> None:
         return
 
     if session_id:
-        st.session_state.researcher_cookie_action = ("clear", None, False)
+        st.session_state.researcher_cookie_action = ("clear", None)
     st.session_state.token = None
     st.session_state.researcher_session_id = None
     st.session_state.target_member = None
@@ -90,9 +90,9 @@ def render_researcher_cookie_action() -> None:
     """Write the opaque ID cookie from a first-party Streamlit HTML element."""
     action = st.session_state.pop("researcher_cookie_action", None)
     if action:
-        operation, session_id, remember = action
+        operation, session_id = action
         st.html(
-            cookie_script(session_id if operation == "set" else None, remember=remember),
+            cookie_script(session_id if operation == "set" else None),
             unsafe_allow_javascript=True,
         )
 
@@ -104,7 +104,7 @@ def logout_researcher() -> None:
     st.session_state.target_member = None
     st.session_state.pop("researcher_account", None)
     st.session_state.pop("researcher_expires_at", None)
-    st.session_state.researcher_cookie_action = ("clear", None, False)
+    st.session_state.researcher_cookie_action = ("clear", None)
 
 
 ensure_session_state()
@@ -139,7 +139,7 @@ STAGE_MAP = {
 # ==========================================
 # 2. 輔助功能
 # ==========================================
-def login(account, password, remember=False):
+def login(account, password):
     try:
         res = requests.post(
             f"{BASE_URL}/login/researcher",
@@ -154,7 +154,7 @@ def login(account, password, remember=False):
             st.session_state.researcher_session_id = session_id
             st.session_state.researcher_account = account
             st.session_state.researcher_expires_at = session.expires_at
-            st.session_state.researcher_cookie_action = ("set", session_id, remember)
+            st.session_state.researcher_cookie_action = ("set", session_id)
             st.success("✅ 登入成功！")
             return True
         else:
@@ -805,11 +805,14 @@ def main():
 
     if not st.session_state.token:
         with st.sidebar.form("login_form"):
-            user, pwd = st.text_input("帳號"), st.text_input("密碼", type="password")
-            remember = st.checkbox("記住我（30 分鐘內免重新輸入）")
+            user = st.text_input("帳號", autocomplete="username")
+            pwd = st.text_input("密碼", type="password", autocomplete="current-password")
             if st.form_submit_button("登入"):
-                if login(user, pwd, remember): st.rerun()
-        st.sidebar.caption("重新整理後可在 30 分鐘內保持登入；勾選後，關閉再開啟瀏覽器也可在時限內免輸入。密碼不會被儲存。")
+                if login(user, pwd): st.rerun()
+        st.sidebar.caption(
+            "登入後 30 分鐘內重新整理仍保持登入；超過 30 分鐘需再次登入。"
+            "若想免重打帳密，可在瀏覽器提示時選擇儲存密碼；共用電腦請勿儲存。"
+        )
     else:
         st.sidebar.success("✅ 已登入")
         remaining_minutes = max(1, int((st.session_state.researcher_expires_at - system_time.time() + 59) // 60))

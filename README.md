@@ -200,9 +200,10 @@ sequenceDiagram
    POST https://icare.docter.pro/back-end/app/login/researcher
    ```
 
-4. 登入成功後，只將 `access_token` 保存在目前瀏覽器對應的 Streamlit session。
-5. 頁面重新整理或 session 結束後，token 可能失效或消失，需要重新登入。
-6. 按「登出」會清除 token 與目前選定的會員。
+4. 登入成功後，伺服器端暫存 `access_token` 30 分鐘；瀏覽器只持有隨機登入識別碼，不持有 DocterCloud token 或密碼。
+5. 30 分鐘內重新整理首頁可恢復登入；超過 30 分鐘後再次重新整理，需重新登入。應用程式重新啟動也會使現有登入失效。
+6. 若希望下次不用重打帳密，請在自己的瀏覽器提示時選擇儲存密碼；這由瀏覽器的密碼管理員處理，不是網站的「記住我」功能。共用電腦請勿儲存。
+7. 按「登出」會撤銷目前的伺服器端登入狀態並清除登入識別碼；瀏覽器密碼管理員儲存的帳密需在瀏覽器內另外移除。
 
 DocterCloud 帳密不會寫入 GitHub、Supabase 或 Streamlit Secrets。
 
@@ -641,7 +642,7 @@ Secrets 不應透過 Git 更新；必須在 Streamlit 管理頁面修改。
 - 受試者頁不讀取、列出、匯出或刪除歷史資料。
 - 會員編號有格式與固定清單驗證。
 - 數值在前端程式與資料庫層雙重檢查。
-- 登入 token 只存於 Streamlit session。
+- 登入 token 只存於伺服器端短效 session；瀏覽器只收到隨機識別碼，不儲存帳密或 DocterCloud token。
 - DocterCloud 與 Supabase 呼叫設定 timeout。
 - 公開錯誤訊息不顯示內部例外內容。
 
