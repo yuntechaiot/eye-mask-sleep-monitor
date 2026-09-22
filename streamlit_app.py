@@ -269,7 +269,7 @@ def render_sleep_diary(member_id: str) -> None:
                 width="stretch",
                 wrap=True,
             )
-            st.caption("0 無干擾　·　1 極輕微　·　2 輕微　·　3 普通　·　4 嚴重　·　5 非常嚴重")
+            st.caption("　1 極輕微　·　2 輕微　·　3 普通　·　4 嚴重　·　5 非常嚴重")
 
         with st.container(border=True):
             st.subheader("起床狀況")
@@ -458,12 +458,10 @@ def render_sleep_log_records() -> None:
     )
 
     metric_col1, metric_col2, metric_col3 = st.columns(3)
-    metric_col1.metric("目前顯示紀錄數", len(frame))
+    metric_col1.metric("紀錄數", len(frame))
     metric_col2.metric("會員數", frame["member_id"].nunique())
     quality = pd.to_numeric(frame["sleep_quality"], errors="coerce").mean()
     metric_col3.metric("平均睡眠品質", f"{quality:.1f} / 5" if pd.notna(quality) else "N/A")
-    if len(records) >= 500:
-        st.caption("每次最多載入最新 500 筆；若需要較精確的範圍，請調整會員或日期篩選。")
 
     display_frame = frame.rename(columns=SLEEP_LOG_COLUMN_NAMES)
     display_columns = [
