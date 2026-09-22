@@ -34,6 +34,20 @@ SUPABASE_KEY = get_setting("SUPABASE_KEY")
 SUPABASE_ADMIN_KEY = get_setting("SUPABASE_ADMIN_KEY") or SUPABASE_KEY
 TW_TZ = ZoneInfo("Asia/Taipei") # 定義台灣時區
 
+# Community Cloud may not expose an app-set cookie through the initial
+# WebSocket request. Read the same short-lived, opaque cookie in the browser
+# and send only its random ID back to the server as a fallback.
+browser_session_cookie = st.components.v2.component(
+    "researcher_session_cookie_reader",
+    js="""
+    export default function({ setStateValue }) {
+        const prefix = "eye_mask_researcher_session=";
+        const cookie = document.cookie.split("; ").find(item => item.startsWith(prefix));
+        setStateValue("session_id", cookie ? cookie.slice(prefix.length) : "");
+    }
+    """,
+)
+
 @st.cache_resource
 def get_supabase(url: str, key: str) -> Client:
     return create_client(url, key)
@@ -60,14 +74,21 @@ def ensure_session_state() -> None:
 def restore_researcher_session() -> None:
     """Restore a still-valid login after a browser refresh (new WebSocket)."""
     ensure_session_state()
+    browser_cookie = browser_session_cookie(
+        key="researcher_session_cookie_reader",
+        on_session_id_change=lambda: None,
+    ).session_id
     session_id = st.session_state.researcher_session_id
     if not session_id:
-        try:
-            session_id = st.context.cookies.get(COOKIE_NAME)
-        except (AttributeError, RuntimeError):
-            session_id = None
-        if not isinstance(session_id, str):
-            session_id = None
+        if isinstance(browser_cookie, str):
+            session_id = browser_cookie or None
+        else:
+            try:
+                session_id = st.context.cookies.get(COOKIE_NAME)
+            except (AttributeError, RuntimeError):
+                session_id = None
+            if not isinstance(session_id, str):
+                session_id = None
 
     session = get_researcher_sessions().get(session_id)
     if session:
@@ -799,7 +820,6 @@ def get_dashboard_fragment(run_every_seconds):
 # ==========================================
 def main():
     ensure_session_state()
-    restore_researcher_session()
     render_researcher_cookie_action()
     st.sidebar.title("🩺 登入")
 
@@ -868,4 +888,5 @@ def main():
         else: st.warning("👈 請先從左側選擇要觀看的會員")
 
 if __name__ == "__main__":
+    restore_researcher_session()
     main()

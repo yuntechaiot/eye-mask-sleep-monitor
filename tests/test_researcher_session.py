@@ -41,7 +41,7 @@ class ResearcherSessionTests(unittest.TestCase):
 
     def test_login_fields_use_browser_password_manager_hints(self):
         app_path = Path(__file__).resolve().parents[1] / "streamlit_app.py"
-        app = AppTest.from_file(str(app_path)).run()
+        app = AppTest.from_file(str(app_path)).run(timeout=10)
         self.assertEqual(len(app.exception), 0)
         self.assertEqual(
             [field.proto.autocomplete for field in app.text_input],
