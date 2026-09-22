@@ -263,7 +263,7 @@ def render_sleep_diary(member_id: str) -> None:
             ]
             disturbance_scale = st.pills(
                 f"干擾程度（點選一項）{required_mark}",
-                options=list(range(6)),
+                options=list(range(1, 6)),
                 selection_mode="single",
                 required=True,
                 width="stretch",
