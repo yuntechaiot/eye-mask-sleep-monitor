@@ -269,7 +269,7 @@ def render_sleep_diary(member_id: str) -> None:
                 width="stretch",
                 wrap=True,
             )
-            st.caption("　1 極輕微　·　2 輕微　·　3 普通　·　4 嚴重　·　5 非常嚴重")
+            st.caption("1 無　·　2 輕微　·　3 普通　·　4 嚴重　·　5 非常嚴重")
 
         with st.container(border=True):
             st.subheader("起床狀況")
